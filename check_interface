@@ -1,0 +1,85 @@
+#!/bin/bash
+
+if [ -z $1 ]
+then
+  echo "Usage: check_interface ifname"
+  echo ""
+  exit 0
+fi
+
+IFACE=$1
+OUTPUT=`/sbin/ifconfig $IFACE`
+
+if [ $? -gt 0 ]
+then
+  echo "ifconfig error for interface $IFACE"
+  exit -1
+else
+  if [[ ! $OUTPUT =~ "RUNNING" ]]
+  then
+    echo "$IFACE CRITICAL!"
+    exit 2
+  fi
+
+  STATS="/tmp/check_interface_${IFACE}_stats"
+  ts=`date +%s`
+
+  in_bytes=`echo $OUTPUT | sed 's/.*RX bytes:\([0-9]*\).*/\1/' `
+  out_bytes=`echo $OUTPUT | sed 's/.*TX bytes:\([0-9]*\).*/\1/' `
+  in_packets=`echo $OUTPUT | sed 's/.*RX packets:\([0-9]*\).*/\1/' `
+  out_packets=`echo $OUTPUT | sed 's/.*TX packets:\([0-9]*\).*/\1/' `
+  in_errors=`echo $OUTPUT | sed 's/.*RX packets:\([0-9]*\) errors:\([0-9]*\).*/\2/' `
+  out_errors=`echo $OUTPUT | sed 's/.*TX packets:\([0-9]*\) errors:\([0-9]*\).*/\2/' `
+
+  if [ -e $STATS ]
+  then
+    set -- `cat $STATS`
+    time=$(($ts - $1))
+    if [[ $in_bytes -ge $2 ]]
+    then
+      in_bytes_rate=$(( ($in_bytes-$2) / $time ))
+    else
+      in_bytes_rate=$(( ($in_bytes+2**32-$2-1) / $time ))
+    fi
+    if [[ $out_bytes -ge $3 ]]
+    then
+      out_bytes_rate=$(( ($out_bytes-$3) / $time ))
+    else
+      out_bytes_rate=$(( ($out_bytes+2**32-$3-1) / $time ))
+    fi
+    if [[ $in_packets -ge $4 ]]
+    then
+      in_packets_rate=$(( ($in_packets-$4) / $time ))
+    else
+      in_packets_rate=$(( ($in_packets+2**32-$4-1) / $time ))
+    fi
+    if [[ $out_packets -ge $5 ]]
+    then
+      out_packets_rate=$(( ($out_packets-$5) / $time ))
+    else
+      out_packets_rate=$(( ($out_packets+2**32-$5-1) / $time ))
+    fi
+    if [[ $in_errors -ge $6 ]]
+    then
+      in_errors_rate=$(( ($in_errors-$6) / $time ))
+    else
+      in_errors_rate=$(( ($in_errors+2**32-$6-1) / $time ))
+    fi
+    if [[ $out_errors -ge $7 ]]
+    then
+      out_errors_rate=$(( ($out_errors-$7) / $time ))
+    else
+      out_errors_rate=$(( ($out_errors+2**32-$7-1) / $time ))
+    fi
+    echo "$IFACE OK -"\
+    "$in_bytes_rate $out_bytes_rate $in_packets_rate $out_packets_rate $in_errors_rate $out_errors_rate"\
+    "| in_bytes=$in_bytes_rate out_bytes=$out_bytes_rate"\
+    "in_packets=$in_packets_rate out_packets=$out_packets_rate"\
+    "in_errors=$in_errors_rate out_errors=$out_errors_rate"
+  else
+    echo "$IFACE OK - no previous stats"
+  fi
+
+  echo "$ts $in_bytes $out_bytes $in_packets $out_packets $in_errors $out_errors" > $STATS
+  exit 0
+fi
