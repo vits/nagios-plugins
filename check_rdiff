@@ -1,0 +1,45 @@
+#!/bin/bash
+
+if [ -z $1 ]
+then
+  echo "Usage: check_rdiff rdiff_dir"
+  echo ""
+  exit 0
+fi
+
+DIR=$1
+OUTPUT=`rdiff-backup --list-increments $DIR`
+
+if [ $? -gt 0 ]
+then
+  echo "rdiff-backup error for $DIR"
+  exit -1
+else
+  if [[ ! $OUTPUT =~ "Current mirror" ]]
+  then
+    echo "$DIR CRITICAL!"
+    exit 2
+  fi
+
+  ts=`date +%s`
+
+  current_date=`echo $OUTPUT | sed 's/.*Current mirror:\(.*\)/\1/' `
+  current_ts=`date --date="$current_date" +%s`
+
+  age=$((($ts - $current_ts) / 3600))
+  if [[ $age -ge 48 ]]
+  then
+    status=2
+    msg=CRITICAL
+  elif [[ $age -ge 24 ]]
+  then
+    status=1
+    msg=WARNING
+  else
+    status=0
+    msg=OK
+  fi
+
+  echo "$DIR $msg | age=$age"
+  exit $status
+fi
